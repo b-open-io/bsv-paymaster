@@ -208,3 +208,54 @@ test "deposit then sponsor then withdraw lifecycle" {
     try pm.withdraw(true, 26_000);
     try std.testing.expectEqual(@as(i64, 0), pm.balance);
 }
+
+// ---------------------------------------------------------------------------
+// Compilation test — verify the contract compiles through the full
+// Runar frontend pipeline (parse → validate → typecheck)
+// ---------------------------------------------------------------------------
+
+test "compile-check reports contract structure" {
+    const allocator = std.testing.allocator;
+    const source = @embedFile("Paymaster.runar.zig");
+
+    const result = try runar.compileCheckSource(allocator, source, "Paymaster.runar.zig");
+    defer result.deinit(allocator);
+
+    try std.testing.expect(result.ok());
+
+    // To compile to actual Bitcoin Script hex and see the transaction structure,
+    // use the Runar CLI:
+    //
+    //   npx runar compile Paymaster.runar.zig --hex
+    //
+    // Or from the Zig compiler directly:
+    //
+    //   cd ~/code/runar/compilers/zig && zig build
+    //   ./zig-out/bin/runar-zig --hex ~/code/bsv-paymaster/Paymaster.runar.zig
+    //
+    // The compiled output is a Bitcoin Script locking script containing a
+    // method dispatch table (OP_IF branches for each method) with the
+    // contract state embedded as push-data constants.
+    //
+    // === What a sponsor transaction looks like ===
+    //
+    //   Input 0 (spending the paymaster UTXO):
+    //     scriptSig: <spender_sig> <spender_pubkey> <amount> <preimage> <method_index=1>
+    //     sequence:  0xffffffff
+    //
+    //   Output 0 (paymaster continuation — covenant-enforced):
+    //     value:     1 sat (dust)
+    //     scriptPubKey: [state: balance-=amount] [same locking script]
+    //     The state bytes are updated inline. The locking script verifies
+    //     hashOutputs in the sighash preimage matches the expected output
+    //     hash, ensuring the spender cannot tamper with the new balance.
+    //
+    //   Output 1 (change):
+    //     value:     <input_sats - 1 - fee>
+    //     scriptPubKey: P2PKH to change address (from preimage _changePKH)
+    //
+    // The spender's application constructs this transaction, provides the
+    // preimage for covenant verification, and broadcasts it. The contract
+    // enforces everything — the spender cannot exceed maxPerTx, cannot
+    // overdraw the balance, and cannot forge the continuation output.
+}
