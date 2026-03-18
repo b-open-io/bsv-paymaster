@@ -1,0 +1,16 @@
+.{
+    .name = .bsv_paymaster,
+    .version = "0.1.0",
+    .fingerprint = 0x655ecb9bfee0c390,
+    .dependencies = .{
+        .runar_zig = .{
+            .path = "../runar/packages/runar-zig",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "Paymaster.runar.zig",
+        "Paymaster_test.zig",
+    },
+}
